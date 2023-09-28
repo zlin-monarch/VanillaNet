@@ -1,9 +1,3 @@
-#Copyright (C) 2023. Huawei Technologies Co., Ltd. All rights reserved.
-
-#This program is free software; you can redistribute it and/or modify it under the terms of the MIT License.
-
-#This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the MIT License for more details.
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -30,6 +24,11 @@ class activation(nn.ReLU):
             return torch.nn.functional.conv2d(
                 super(activation, self).forward(x), 
                 self.weight, self.bias, padding=self.act_num, groups=self.dim)
+            """
+            input.shape = b, c, h, w
+            weight.shape = (c_out, c/groups, h, w)
+            bias = (c_out)
+            """
         else:
             return self.bn(torch.nn.functional.conv2d(
                 super(activation, self).forward(x),
@@ -87,6 +86,10 @@ class Block(nn.Module):
             
             # We use leakyrelu to implement the deep training technique.
             x = torch.nn.functional.leaky_relu(x,self.act_learn)
+            """
+            max(0, x) + negative_slope * min(0, x)
+            negative_slope = self.act_learn 
+            """
             
             x = self.conv2(x)
 
@@ -203,6 +206,7 @@ class VanillaNet(nn.Module):
         return x.view(x.size(0),-1)
 
     def _fuse_bn_tensor(self, conv, bn):
+        # fusing conv, bn into a single layer 
         kernel = conv.weight
         bias = conv.bias
         running_mean = bn.running_mean

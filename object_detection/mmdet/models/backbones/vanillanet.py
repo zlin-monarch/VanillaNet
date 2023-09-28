@@ -33,6 +33,7 @@ class activation(nn.ReLU):
 
     def forward(self, x):
         return self.bn(torch.nn.functional.conv2d(super(activation, self).forward(x), self.weight, padding=self.act_num, groups=self.dim))
+        # x- > nn.ReLU -> conv2d -> bn -> x 
 
 class Block(nn.Module):
     def __init__(self, dim, dim_out, act_num=3, stride=2, norm_layer=nn.SyncBatchNorm):
@@ -77,7 +78,8 @@ class Vanillanet(BaseModule):
 
         self.stages = nn.ModuleList()
         for i in range(len(strides)):
-            stage = Block(dim=dims[i], dim_out=dims[i+1], act_num=act_num, stride=strides[i], norm_layer=norm_layer)
+            stage = Block(dim=dims[i], dim_out=dims[i+1], act_num=act_num, \
+                          stride=strides[i], norm_layer=norm_layer)
             self.stages.append(stage)
         self.depth = len(strides)
 
