@@ -18,3 +18,4 @@ __all__ = [
     'HourglassNet', 'DetectoRS_ResNet', 'DetectoRS_ResNeXt', 'Darknet',
     'ResNeSt', 'TridentResNet', 'SwinTransformer', 'Vanillanet'
 ]
+print(__file__, 'is loaded')

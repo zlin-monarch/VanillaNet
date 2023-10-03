@@ -34,6 +34,14 @@ import utils
 import models.vanillanet
 
 
+from icecream import ic 
+from types import FunctionType 
+
+ic.configureOutput(includeContext=True)
+ic.enable()
+# ic.disable()
+
+
 def str2bool(v):
     """
     Converts string to bool type; enables command line 
@@ -57,13 +65,15 @@ def get_args_parser():
     parser.add_argument('--decay_epochs', default=100, type=int,
                         help='for deep training strategy')
     parser.add_argument('--decay_linear', type=str2bool, default=True,
-                        help='cos/linear for decay manner')
+                        help='cos/linear for decay manner') # nice type variable!! 
     parser.add_argument('--update_freq', default=1, type=int,
                         help='gradient accumulation steps')
 
     # Model parameters
     parser.add_argument('--model', default='vanillanet_5', type=str, metavar='MODEL',
-                        help='Name of model to train')
+                        help='Name of model to train') 
+    # metavar: only help on : python3 main.py --help -> `--model Model` (no effect on command line)
+    
     parser.add_argument('--switch_to_deploy', default=None, type=str)
     parser.add_argument('--deploy', type=str2bool, default=False)
     parser.add_argument('--drop', type=float, default=0, metavar='PCT',
@@ -101,7 +111,7 @@ def get_args_parser():
     parser.add_argument('--min_lr', type=float, default=1e-6, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0 (1e-6)')
     parser.add_argument('--warmup_epochs', type=int, default=5, metavar='N',
-                        help='epochs to warmup LR, if scheduler supports')
+                        help='epochs to warmup LR, if scheduler supports')  
     parser.add_argument('--warmup_steps', type=int, default=-1, metavar='N',
                         help='num of steps to warmup LR, will overload warmup_epochs if set > 0')
 
@@ -240,6 +250,8 @@ def main(args):
     sampler_train = torch.utils.data.DistributedSampler(
         dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True, seed=args.seed,
     )
+    # num_replicas: number of processes participating: number_of_pc * number_of_gpus_per_pc, in distributed training 
+
     print("Sampler_train = %s" % str(sampler_train))
     if args.dist_eval:
         if len(dataset_val) % num_tasks != 0:
@@ -249,7 +261,7 @@ def main(args):
         sampler_val = torch.utils.data.DistributedSampler(
             dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=False)
     else:
-        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+        sampler_val = torch.utils.data.SequentialSampler(dataset_val)  # provide a fixed order of dataset, ?/ why cannot use the distributed sampler?? 
 
     if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
@@ -263,7 +275,8 @@ def main(args):
         wandb_logger = None
 
     data_loader_train = torch.utils.data.DataLoader(
-        dataset_train, sampler=sampler_train,
+        dataset_train, 
+        sampler=sampler_train,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
@@ -272,7 +285,8 @@ def main(args):
 
     if dataset_val is not None:
         data_loader_val = torch.utils.data.DataLoader(
-            dataset_val, sampler=sampler_val,
+            dataset_val, 
+            sampler=sampler_val,
             batch_size=int(1.5 * args.batch_size),
             num_workers=args.num_workers,
             pin_memory=args.pin_mem,
@@ -297,7 +311,9 @@ def main(args):
         act_num=args.act_num,
         drop_rate=args.drop,
         deploy=args.deploy,
-        )
+        )  # ??  
+    ic(model)
+
 
     if args.finetune:
         if args.finetune.startswith('https'):
@@ -309,6 +325,7 @@ def main(args):
         print("Load ckpt from %s" % args.finetune)
         checkpoint_model = None
         for model_key in args.model_key.split('|'):
+            ic(model_key)
             if model_key in checkpoint:
                 checkpoint_model = checkpoint[model_key]
                 print("Load state_dict by model_key = %s" % model_key)
@@ -320,7 +337,8 @@ def main(args):
             if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
                 print(f"Removing key {k} from pretrained checkpoint")
                 del checkpoint_model[k]
-        utils.load_state_dict(model, checkpoint_model, prefix=args.model_prefix)
+        ic(checkpoint_model.keys())
+        utils.load_state_dict(model, checkpoint_model, prefix=args.model_prefix)  # ?? 
     
     model.to(device)
     if args.switch_to_deploy:
@@ -337,10 +355,11 @@ def main(args):
             model_ema.append(
                 ModelEma(model, decay=ema_decay, device='cpu' if args.model_ema_force_cpu else '', resume='')
             )
+            # Ema: use the moving average to calculate the weights over time 
         print("Using EMA with decay = %s" % args.model_ema_decay)
 
     model_without_ddp = model
-    n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    n_parameters = sum([p.numel() for p in model.parameters() if p.requires_grad])  # the number of parameters!! 
 
     print("Model = %s" % str(model_without_ddp))
     print('number of params (M): %.2f' % (n_parameters / 1.e6))
@@ -350,6 +369,7 @@ def main(args):
         input = torch.randn(input_size).cuda()
         from torchprofile import profile_macs
         macs = profile_macs(model, input)
+        # caclulate the number of multiply-add operations: one multiple + one add = one macs 
         print('model flops (G):', macs / 2 / 1.e9, 'input_size:', input_size)
 
     total_batch_size = args.batch_size * args.update_freq * utils.get_world_size()
@@ -362,7 +382,8 @@ def main(args):
 
     if args.layer_decay < 1.0 or args.layer_decay > 1.0:
         num_layers = args.layer_decay_num_layers
-        assigner = LayerDecayValueAssigner(num_max_layer=num_layers, values=list(args.layer_decay ** (num_layers + 1 - i) for i in range(num_layers + 2)))
+        assigner = LayerDecayValueAssigner(num_max_layer=num_layers, \
+                                           values=list(args.layer_decay ** (num_layers + 1 - i) for i in range(num_layers + 2)))
     else:
         assigner = None
 
@@ -391,15 +412,26 @@ def main(args):
     wd_schedule_values = utils.cosine_scheduler(
         args.weight_decay, args.weight_decay_end, args.epochs, num_training_steps_per_epoch)
     print("Max WD = %.7f, Min WD = %.7f" % (max(wd_schedule_values), min(wd_schedule_values)))
-    
+    # ---------------
     if mixup_fn is not None:
         if args.bce_loss:
             criterion = BinaryCrossEntropy(target_threshold=args.bce_target_thresh)
         else:
             # smoothing is handled with mixup label transform
             criterion = SoftTargetCrossEntropy()
+            """
+            when target is soft labels 
+            >>> p = F.log_softmax(pred, 1)  # do softmax --> log 
+            >>> w_labels = weights*labels
+            >>> loss = -(w_labels*p).sum() / (w_labels).sum()
+            """
     elif args.smoothing > 0.:
         criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
+        """
+        target_smooth = (1 - self.epsilon) * target + self.epsilon / self.num_classes
+        return nn.CrossEntropyLoss()(input, target_smooth)
+        # provide a smooth factor to improve the generalization of the model
+        """
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
@@ -418,6 +450,7 @@ def main(args):
             pin_memory=args.pin_mem,
             drop_last=False
         )
+        # pin_memory: If True, the data loader will copy tensors with pinned memory into gpu before returning them.
         if args.real_labels:
             dataset = create_dataset(root=args.data_path, name='', split='validation', class_map='')
             real_labels = RealLabelsImagenet(dataset.filenames(basename=True), real_json=args.real_labels)

@@ -37,7 +37,7 @@ def build_dataset(is_train, args):
         nb_classes = 1000
     elif args.data_set == "image_folder":
         root = args.data_path if is_train else args.eval_data_path
-        dataset = datasets.ImageFolder(root, transform=transform)
+        dataset = datasets.ImageFolder(root, transform=transform) # read from PIL images: b, c, h, w (rgb)
         nb_classes = args.nb_classes
         assert len(dataset.class_to_idx) == nb_classes
     else:
@@ -67,6 +67,11 @@ def build_transform(is_train, args):
             mean=mean,
             std=std,
         )
+        # it uses: torchvision.transform
+        # input_size: only for resize (not random resize)
+        # if is_training: no heavy augmentation 
+        # auto_augment: heavy augmentation methods 
+        # re_prob: random erasing probability
         if not resize_im:
             transform.transforms[0] = transforms.RandomCrop(
                 args.input_size, padding=4)
@@ -85,6 +90,8 @@ def build_transform(is_train, args):
             if args.crop_pct is None:
                 args.crop_pct = 224 / 256
             size = int(args.input_size / args.crop_pct)
+            # crop the 224/256 of the original image  
+
             t.append(
                 # to maintain same ratio w.r.t. 224 images
                 transforms.Resize(size, interpolation=transforms.InterpolationMode.BICUBIC),  

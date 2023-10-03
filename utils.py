@@ -87,7 +87,8 @@ class SmoothedValue(object):
 
 class MetricLogger(object):
     def __init__(self, delimiter="\t"):
-        self.meters = defaultdict(SmoothedValue)
+        self.meters = defaultdict(SmoothedValue) 
+        # smoothvalue: provide the moving average over time 
         self.delimiter = delimiter
 
     def update(self, **kwargs):
@@ -103,7 +104,7 @@ class MetricLogger(object):
         if attr in self.meters:
             return self.meters[attr]
         if attr in self.__dict__:
-            return self.__dict__[attr]
+            return self.__dict__[attr]  # __dict__: get the property dict 
         raise AttributeError("'{}' object has no attribute '{}'".format(
             type(self).__name__, attr))
 
@@ -191,6 +192,7 @@ class TensorboardLogger(object):
 
     def flush(self):
         self.writer.flush()
+        # flus: write into the logger 
 
 
 class WandbLogger(object):
@@ -298,11 +300,18 @@ def save_on_master(*args, **kwargs):
 
 def init_distributed_mode(args):
     if args.dist_on_itp:
-        args.rank = int(os.environ['OMPI_COMM_WORLD_RANK'])
+        args.rank = int(os.environ['OMPI_COMM_WORLD_RANK']) 
+        # rank: the rank of the current process glocally across the machine (can have 2 pc )
+
         args.world_size = int(os.environ['OMPI_COMM_WORLD_SIZE'])
+        # world_size: the number of processes in the current train group : number of pc * number of gpus per pc
+
         args.gpu = int(os.environ['OMPI_COMM_WORLD_LOCAL_RANK'])
         args.dist_url = "tcp://%s:%s" % (os.environ['MASTER_ADDR'], os.environ['MASTER_PORT'])
         os.environ['LOCAL_RANK'] = str(args.gpu)
+        # local rank: the rank of the current process locally within the node (on current pc)
+        # if have any one pc, rank = local rank 
+
         os.environ['RANK'] = str(args.rank)
         os.environ['WORLD_SIZE'] = str(args.world_size)
         # ["RANK", "WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT", "LOCAL_RANK"]
@@ -327,7 +336,8 @@ def init_distributed_mode(args):
     torch.cuda.set_device(args.gpu)
     args.dist_backend = 'nccl'
     print('| distributed init (rank {}): {}, gpu {}'.format(
-        args.rank, args.dist_url, args.gpu), flush=True)
+        args.rank, args.dist_url, args.gpu), flush=True) 
+     # flush = True: add ', Done!' to the end of the print
     torch.distributed.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                          world_size=args.world_size, rank=args.rank)
     torch.distributed.barrier()

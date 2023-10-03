@@ -110,11 +110,11 @@ class Block(nn.Module):
         return kernel * t, beta + (bias - running_mean) * gamma / std
     
     def switch_to_deploy(self):
-        kernel, bias = self._fuse_bn_tensor(self.conv1[0], self.conv1[1])
+        kernel, bias = self._fuse_bn_tensor(self.conv1[0], self.conv1[1])  # (512, 512, 1, 1)
         self.conv1[0].weight.data = kernel
         self.conv1[0].bias.data = bias
         # kernel, bias = self.conv2[0].weight.data, self.conv2[0].bias.data
-        kernel, bias = self._fuse_bn_tensor(self.conv2[0], self.conv2[1])
+        kernel, bias = self._fuse_bn_tensor(self.conv2[0], self.conv2[1])   # (1024, 512, 1, 1),(1024),
         self.conv = self.conv2[0]
         self.conv.weight.data = torch.matmul(kernel.transpose(1,3), self.conv1[0].weight.data.squeeze(3).squeeze(2)).transpose(1,3)
         self.conv.bias.data = bias + (self.conv1[0].bias.data.view(1,-1,1,1)*kernel).sum(3).sum(2).sum(1)
@@ -220,10 +220,11 @@ class VanillaNet(nn.Module):
     
     def switch_to_deploy(self):
         self.stem2[2].switch_to_deploy()
-        kernel, bias = self._fuse_bn_tensor(self.stem1[0], self.stem1[1])
+        kernel, bias = self._fuse_bn_tensor(self.stem1[0], self.stem1[1])  # (512, 3, 4, 4), (512)  # output_channel, input_channel, kernel_size, kernel_size
         self.stem1[0].weight.data = kernel
         self.stem1[0].bias.data = bias
-        kernel, bias = self._fuse_bn_tensor(self.stem2[0], self.stem2[1])
+        kernel, bias = self._fuse_bn_tensor(self.stem2[0], self.stem2[1]) # (512, 512, 1, 1), (512)
+        print(self.stem1[0].weight.data.shape)
         self.stem1[0].weight.data = torch.einsum('oi,icjk->ocjk', kernel.squeeze(3).squeeze(2), self.stem1[0].weight.data)
         self.stem1[0].bias.data = bias + (self.stem1[0].bias.data.view(1,-1,1,1)*kernel).sum(3).sum(2).sum(1)
         self.stem = torch.nn.Sequential(*[self.stem1[0], self.stem2[2]])
@@ -318,3 +319,13 @@ def vanillanet_13_x1_5_ada_pool(pretrained=False, in_22k=False, **kwargs):
         ada_pool=[0,38,19,0,0,0,0,0,0,10,0],
         **kwargs)
     return model
+
+
+if __name__ == '__main__':
+    model = vanillanet_6(deploy = False)
+    input = torch.randn(2,3,1920, 1080)
+    output = model(input)    
+    print(output.shape)
+    model.switch_to_deploy()
+    output = model(input) 
+    print(output.shape)

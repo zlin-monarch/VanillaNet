@@ -28,6 +28,8 @@ try:
 except ImportError:
     has_apex = False
 
+from icecream import ic 
+ic.configureOutput(includeContext=True) # line number, scirpt name, function name
 
 def get_num_layer_for_vanillanet(num_max_layer, var_name):    
     if var_name.startswith("stem"):
@@ -45,11 +47,13 @@ class LayerDecayValueAssigner(object):
     def __init__(self, num_max_layer, values):
         self.num_max_layer = num_max_layer
         self.values = values
+        ic(self.values)
 
     def get_scale(self, layer_id):
         return self.values[layer_id]
 
     def get_layer_id(self, var_name):
+        ic(var_name)
         return get_num_layer_for_vanillanet(self.num_max_layer, var_name)
 
 
